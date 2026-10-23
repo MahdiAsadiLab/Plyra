@@ -1,0 +1,2 @@
+# python-chess is published on PyPI under the name "chess"
+chess>=1.10,<2

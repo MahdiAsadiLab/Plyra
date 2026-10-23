@@ -1,0 +1,26 @@
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Editor settings
+.vscode/
+
+# Testing artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Stockfish executables: do not publish before review
+engine/*.exe
+engine/**/*.exe

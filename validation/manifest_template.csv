@@ -1,0 +1,4 @@
+pgn,white_chesscom,black_chesscom,white_lichess,black_lichess
+# One game per line. Fill in ONLY numbers you copied from the real analysis pages.
+# Leave a cell empty if you do not have that value. Delete this example line:
+games/example_game.pgn,,,,

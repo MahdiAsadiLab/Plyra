@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChessLens report - Player A vs Player B</title>
+<style>
+:root { --bg:#161a1f; --panel:#1f252c; --panel2:#262d35; --line:#333c46; --text:#e6e9ed;
+        --muted:#9aa5b1; --accent:#7fb069; --white:#f2f2f2; --black:#2b2b2b;
+        --light-sq:#e8dcc4; --dark-sq:#8a6f52; --hl:rgba(255,213,79,.55); }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text);
+       font:15px/1.45 -apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+a { color:var(--accent); }
+header.top { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 20px; padding:14px 22px;
+             background:var(--panel); border-bottom:1px solid var(--line); }
+.brand { font-size:20px; font-weight:700; letter-spacing:.3px; }
+.brand span { color:var(--accent); }
+.model { color:var(--muted); font-size:13px; }
+main { max-width:1500px; margin:0 auto; padding:18px 22px 40px; }
+.game-title { font-size:24px; font-weight:700; margin:0 0 4px; }
+.meta { color:var(--muted); font-size:14px; margin:0 0 14px; }
+.meta span + span::before { content:"\00b7"; margin:0 8px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:16px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 16px; }
+.card .num { font-size:30px; font-weight:700; line-height:1.1; }
+.card .lbl { color:var(--muted); font-size:13px; }
+.card .sub { color:var(--muted); font-size:12px; margin-top:2px; }
+.swatch { display:inline-block; width:11px; height:11px; border-radius:2px; margin-right:6px; border:1px solid #888; }
+.swatch.w { background:var(--white); } .swatch.b { background:var(--black); }
+.layout { display:grid; grid-template-columns:minmax(300px,500px) minmax(320px,1fr) minmax(300px,400px); gap:16px; align-items:start; }
+@media (max-width:1250px) { .layout { grid-template-columns:minmax(300px,520px) 1fr; } .movelist-panel { grid-column:1 / -1; } }
+@media (max-width:760px) { .layout { grid-template-columns:1fr; } main { padding:12px; } }
+.layout > * { min-width:0; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+.panel h2 { margin:0 0 8px; font-size:16px; }
+.board-wrap { position:relative; width:100%; aspect-ratio:1/1; }
+.board { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr);
+         width:100%; height:100%; border:2px solid #000; user-select:none; }
+.sq { position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.sq.l { background:var(--light-sq); } .sq.d { background:var(--dark-sq); }
+.sq.hl::after { content:""; position:absolute; inset:0; background:var(--hl); }
+.piece { position:relative; z-index:1; font-size:min(8.4vw,52px); line-height:1;
+         font-family:"Segoe UI Symbol","DejaVu Sans","Noto Sans Symbols2",Arial,sans-serif; }
+.piece.w { color:#fff; text-shadow:0 0 2px #000,0 0 2px #000,0 0 3px #000; }
+.piece.b { color:#111; text-shadow:0 0 1px #fff; }
+.coord { position:absolute; z-index:2; font-size:10px; font-weight:700; opacity:.8; pointer-events:none; }
+.sq.l .coord { color:#8a6f52; } .sq.d .coord { color:#e8dcc4; }
+.coord.f { right:2px; bottom:1px; } .coord.r { left:2px; top:1px; }
+svg.arrows { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:3; }
+.controls { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+button, select { background:var(--panel2); color:var(--text); border:1px solid var(--line);
+                 border-radius:6px; padding:6px 11px; font:inherit; cursor:pointer; }
+button:hover, select:hover { border-color:var(--accent); }
+button:focus-visible, select:focus-visible, tr:focus-visible, svg:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+button[aria-pressed="true"] { background:#34503a; border-color:var(--accent); }
+.legend { color:var(--muted); font-size:12px; margin-top:8px; }
+.legend i { display:inline-block; width:18px; height:0; border-top:4px solid; vertical-align:middle; margin:0 4px 0 10px; }
+.legend i.best { border-color:#3fb950; } .legend i.played { border-color:#e5534b; border-top-style:dashed; }
+.graph { width:100%; height:auto; display:block; background:var(--panel2); border-radius:6px; }
+.graph .axis { stroke:var(--line); stroke-width:1; } .graph .mid { stroke:#556; stroke-dasharray:4 4; }
+.graph .area-w { fill:rgba(240,240,240,.30); } .graph .area-b { fill:rgba(0,0,0,.35); }
+.graph .line { fill:none; stroke:#cfd6dd; stroke-width:2; }
+.graph .cursor { stroke:var(--accent); stroke-width:2; display:none; }
+.graph .pt { cursor:pointer; }
+.graph text { fill:var(--muted); font-size:11px; }
+.hint { color:var(--muted); font-size:12px; margin:6px 0 0; }
+.badge { display:inline-block; padding:1px 8px; border-radius:10px; font-weight:600; font-size:12.5px; white-space:nowrap; }
+.details dl { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:8px 0 0; }
+.details dt { color:var(--muted); } .details dd { margin:0; overflow-wrap:anywhere; }
+.details ul { margin:4px 0 0; padding-left:18px; } .details .mono { font-family:Consolas,"Courier New",monospace; }
+.filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; align-items:center; }
+.filters label { color:var(--muted); font-size:13px; }
+.scroll { max-height:560px; overflow:auto; border:1px solid var(--line); border-radius:6px; }
+table.moves { border-collapse:collapse; width:100%; }
+table.moves th { position:sticky; top:0; background:var(--panel2); text-align:left; font-size:12px; color:var(--muted); padding:6px 8px; z-index:1; }
+table.moves td { padding:5px 8px; border-top:1px solid var(--line); font-size:13.5px; vertical-align:middle; }
+table.moves td:first-child { white-space:nowrap; }
+table.moves tr.mv { cursor:pointer; } table.moves tr.mv:hover { background:#2a323b; }
+table.moves tr.mv.sel { background:#34503a; }
+table.moves tr.hidden { display:none; }
+table.moves td.n, table.moves th.n { text-align:right; font-variant-numeric:tabular-nums; }
+.mono { font-family:Consolas,"Courier New",monospace; }
+.counts table { border-collapse:collapse; width:100%; } .counts td, .counts th { padding:4px 8px; border-bottom:1px solid var(--line); text-align:right; font-size:13.5px; }
+.counts td:first-child, .counts th:first-child { text-align:left; } .counts th { color:var(--muted); font-weight:600; }
+.settings, .warn { font-size:13.5px; color:var(--muted); } .settings li, .warn li { margin:2px 0; }
+.note { background:#2b2a1f; border:1px solid #5b5427; border-radius:6px; padding:10px 14px; margin:16px 0; font-size:13.5px; }
+noscript .note { background:#3a2323; border-color:#6b3a3a; }
+.empty { color:var(--muted); font-style:italic; }
+footer { color:var(--muted); font-size:12.5px; margin-top:22px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Chess<span>Lens</span></div>
+  <div class="model">Accuracy values are ChessLens estimates (lichess-inspired-v1), not Chess.com's or Lichess's official scores.</div>
+</header>
+<main>
+  <h1 class="game-title">Player A (1500) vs Player B (1480)</h1>
+  <p class="meta"><span>Result: 1-0</span><span>Date: 2026.01.01</span><span>Event: Synthetic test game</span><span>Ending: Checkmate - White won.</span></p>
+  <section class="cards" aria-label="Summary"><div class="card"><div class="num">99.8</div><div class="lbl"><span class="swatch w"></span>White accuracy</div><div class="sub">avg. move accuracy 99.5</div></div><div class="card"><div class="num">53.0</div><div class="lbl"><span class="swatch b"></span>Black accuracy</div><div class="sub">avg. move accuracy 73.1</div></div><div class="card"><div class="num">7</div><div class="lbl">half-moves analyzed</div><div class="sub">7 scored</div></div><div class="card"><div class="num">1</div><div class="lbl">mistakes, misses and blunders</div><div class="sub">0 inaccuracies</div></div><div class="card"><div class="num">0</div><div class="lbl">brilliant and great moves</div></div></section>
+
+  <section class="panel" aria-label="Evaluation graph" style="margin-bottom:16px">
+    <h2>Evaluation graph</h2>
+    <svg id="graph" class="graph" viewBox="0 0 1000 200" role="img" aria-label="Evaluation graph: White's winning chances through the game"><line class="axis" x1="46.0" x2="980.0" y1="14.0" y2="14.0"/><text x="40.0" y="17.0" text-anchor="end">100%</text><line class="mid" x1="46.0" x2="980.0" y1="96.0" y2="96.0"/><text x="40.0" y="99.0" text-anchor="end">50%</text><line class="axis" x1="46.0" x2="980.0" y1="178.0" y2="178.0"/><text x="40.0" y="181.0" text-anchor="end">0%</text><text x="980.0" y="25.0" text-anchor="end">White better</text><text x="980.0" y="174.0" text-anchor="end">Black better</text><text x="312.9" y="194" text-anchor="middle">1</text><text x="579.7" y="194" text-anchor="middle">2</text><text x="846.6" y="194" text-anchor="middle">3</text><polygon class="area-w" points="46.0,178.0 46.0,91.5 179.4,91.5 312.9,89.2 446.3,90.0 579.7,88.5 713.1,56.0 846.6,19.8 980.0,14.0 980.0,178.0"/><polyline class="line" points="46.0,91.5 179.4,91.5 312.9,89.2 446.3,90.0 579.7,88.5 713.1,56.0 846.6,19.8 980.0,14.0"/><circle class="pt" data-ply="6" cx="846.6" cy="19.8" r="4.5" fill="#b71c1c" stroke="#fff" stroke-width="1"><title>Move 3... Nf6: Blunder (+0.30)</title></circle><line id="graph-cursor" class="cursor" x1="0" x2="0" y1="14.0" y2="178.0"/></svg>
+    <p class="hint">White's winning chances (Win%) after every move. Above the dashed line White is better.
+    Coloured dots mark brilliant, great and faulty moves. Click the graph or a dot to inspect a move.</p>
+  </section>
+
+  <div class="layout">
+    <section class="panel" aria-label="Board">
+      <h2>Board</h2>
+      <div id="board-fallback" class="note">The interactive board needs JavaScript. The move list, graph and
+      summary on this page work without it. Starting position of this game: <span class="mono">rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1</span></div>
+      <div id="board-area" style="display:none">
+        <div class="board-wrap">
+          <div id="board" class="board" role="img" aria-label="Chess board"></div>
+          <svg id="arrows" class="arrows" viewBox="0 0 8 8" aria-hidden="true"></svg>
+        </div>
+        <p id="board-caption" class="hint" aria-live="polite"></p>
+        <div class="controls">
+          <button id="btn-first" type="button" title="Start (Home)">&laquo;</button>
+          <button id="btn-prev" type="button" title="Previous (Left arrow)">&lsaquo; Prev</button>
+          <button id="btn-next" type="button" title="Next (Right arrow)">Next &rsaquo;</button>
+          <button id="btn-last" type="button" title="End">&raquo;</button>
+          <button id="btn-flip" type="button" aria-pressed="false" title="Flip board (F)">Flip</button>
+          <button id="btn-mode" type="button" aria-pressed="false">Showing: after move</button>
+        </div>
+        <p class="legend"><i class="played"></i>played move <i class="best"></i>engine's best move
+        (arrows appear when the board shows the position before the move).</p>
+      </div>
+      <noscript><div class="note">JavaScript is disabled, so the board is unavailable.</div></noscript>
+    </section>
+
+    <section class="panel" aria-label="Move details">
+      <div class="details" id="details">
+        <h2>Move details</h2>
+        <div id="details-body"><p class="empty">Details appear here when JavaScript is enabled and a move is selected.</p></div>
+      </div>
+    </section>
+
+    <section class="panel movelist-panel" aria-label="Moves">
+      <h2>Moves</h2>
+      <div class="filters">
+        <label>Side <select id="filter-side"><option value="both">Both</option><option value="White">White</option><option value="Black">Black</option></select></label>
+        <label>Class <select id="filter-label"><option value="all">All</option><option value="Best">Best</option><option value="Excellent">Excellent</option><option value="Blunder">Blunder</option></select></label>
+        <button id="filter-errors" type="button" aria-pressed="false">Errors only</button>
+        <span id="filter-count" class="hint"></span>
+      </div>
+      <div class="scroll">
+        <table class="moves">
+          <thead><tr><th>Move</th><th>Played</th><th>Class</th><th class="n">Acc.</th><th>Eval</th></tr></thead>
+          <tbody><tr class="mv" data-ply="1"><td class="mono">Move 1</td><td class="mono"><strong>e4</strong></td><td><span class="badge" style="background:#2e7d32;color:#ffffff">★ Best</span></td><td class="n">100.0</td><td class="mono">+0.30</td></tr><tr class="mv" data-ply="2"><td class="mono">Move 1...</td><td class="mono"><strong>e5</strong></td><td><span class="badge" style="background:#558b2f;color:#ffffff">✔ Excellent</span></td><td class="n">95.0</td><td class="mono">+0.30</td></tr><tr class="mv" data-ply="3"><td class="mono">Move 2</td><td class="mono"><strong>Bc4</strong></td><td><span class="badge" style="background:#2e7d32;color:#ffffff">★ Best</span></td><td class="n">100.0</td><td class="mono">+0.30</td></tr><tr class="mv" data-ply="4"><td class="mono">Move 2...</td><td class="mono"><strong>Nc6</strong></td><td><span class="badge" style="background:#558b2f;color:#ffffff">✔ Excellent</span></td><td class="n">97.0</td><td class="mono">+0.30</td></tr><tr class="mv" data-ply="5"><td class="mono">Move 3</td><td class="mono"><strong>Qh5</strong></td><td><span class="badge" style="background:#558b2f;color:#ffffff">✔ Excellent</span></td><td class="n">97.9</td><td class="mono">+0.30</td></tr><tr class="mv" data-ply="6"><td class="mono">Move 3...</td><td class="mono"><strong>Nf6</strong></td><td><span class="badge" style="background:#b71c1c;color:#ffffff">?? Blunder</span></td><td class="n">27.2</td><td class="mono">+0.30</td></tr><tr class="mv" data-ply="7"><td class="mono">Move 4</td><td class="mono"><strong>Qxf7#</strong></td><td><span class="badge" style="background:#2e7d32;color:#ffffff">★ Best</span></td><td class="n">100.0</td><td class="mono">Checkmate</td></tr></tbody>
+        </table>
+      </div>
+      <p class="hint">Eval is shown from White's point of view after the move. Accuracy is per move (0-100).</p>
+    </section>
+  </div>
+
+  <div class="layout" style="margin-top:16px">
+    <section class="panel counts" aria-label="Classification counts">
+      <h2>Move classifications</h2>
+      <table><tr><th>Class</th><th>White</th><th>Black</th><th>Total</th></tr><tr><td><span class="badge" style="background:#0e7c7b;color:#ffffff">!! Brilliant</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge" style="background:#2b5d8a;color:#ffffff">! Great</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge" style="background:#2e7d32;color:#ffffff">★ Best</span></td><td>3</td><td>0</td><td>3</td></tr><tr><td><span class="badge" style="background:#558b2f;color:#ffffff">✔ Excellent</span></td><td>1</td><td>2</td><td>3</td></tr><tr><td><span class="badge" style="background:#8aa63c;color:#1a1a1a">○ Good</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge" style="background:#8d6e63;color:#ffffff">B Book</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge" style="background:#f9a825;color:#1a1a1a">?! Inaccuracy</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge" style="background:#ef6c00;color:#ffffff">? Mistake</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge" style="background:#d84315;color:#ffffff">× Miss</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge" style="background:#b71c1c;color:#ffffff">?? Blunder</span></td><td>0</td><td>1</td><td>1</td></tr></table>
+    </section>
+    <section class="panel" aria-label="Settings">
+      <h2>Analysis settings</h2>
+      <ul class="settings"><li>Engine: Synthetic data (not Stockfish)</li><li>Depth: 12 &middot; Candidate moves (MultiPV): 3 &middot; Brilliant verification depth: 16</li><li>Engine searches: 7 (reused positions: 0)</li><li>Accuracy model: lichess-inspired-v1 &middot; Expected-points model: lichess-logistic-v1</li><li>Opening book: not used (Book labels disabled)</li><li>Generated: 2026-01-01 12:00</li></ul>
+    </section>
+    <section class="panel" aria-label="About">
+      <h2>About these numbers</h2>
+      <p class="settings">ChessLens Accuracy and the move classifications are custom, experimental metrics made for this project. They are not Chess.com&#x27;s (or Lichess&#x27;s) official Accuracy or Game Review classifications. Labels depend on engine evaluations at a fixed depth; special labels
+      (Great, Brilliant, Miss, Book) are conservative heuristics.</p>
+      <h2>Warnings</h2><ul class="warn"><li>DEMO FILE: the evaluations in this report are invented to preview the layout. It is not a Stockfish analysis of a real game.</li></ul>
+    </section>
+  </div>
+  <footer>Generated by ChessLens. Self-contained report: no network access needed.</footer>
+</main>
+<script type="application/json" id="chesslens-data">{"accuracy_model":"lichess-inspired-v1","start_fen":"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1","label_style":{"Brilliant":["#0e7c7b","#ffffff","!!"],"Great":["#2b5d8a","#ffffff","!"],"Best":["#2e7d32","#ffffff","★"],"Excellent":["#558b2f","#ffffff","✔"],"Good":["#8aa63c","#1a1a1a","○"],"Book":["#8d6e63","#ffffff","B"],"Inaccuracy":["#f9a825","#1a1a1a","?!"],"Mistake":["#ef6c00","#ffffff","?"],"Miss":["#d84315","#ffffff","×"],"Blunder":["#b71c1c","#ffffff","??"],"Unclassified":["#757575","#ffffff","-"]},"graph":{"x0":46.0,"x1":980.0},"moves":[{"ply":1,"label_text":"Move 1","color":"White","san":"e4","uci":"e2e4","label":"Best","accuracy":100.0,"win_before":52.75875538925041,"win_after":52.75875538925041,"ep_before":0.5275875538925041,"ep_played":0.5275875538925041,"ep_loss":0.0,"loss_cp":0,"best_san":"e4","best_uci":"e2e4","best_text":"+0.30","played_text":"+0.30","best_line":["e4","Nc6","Bb5"],"played_line":["e4"],"candidates":["Nf3 (+0.30)"],"annotations":[],"explanation":["Expected points 0.53 before the move, 0.53 after it: loss 0.000.","The played move is the engine's first choice.","A loss of 0.000 is in the Best range (at most 0.005)."],"note":"Great and Brilliant need at least 2 candidate moves; use --multipv 2 or higher.","confidence":"normal","fen_before":"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1","fen_after":"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"},{"ply":2,"label_text":"Move 1...","color":"Black","san":"e5","uci":"e7e5","label":"Excellent","accuracy":95.00790408755546,"win_before":47.24124461074959,"win_after":45.86711116420767,"ep_before":0.4724124461074959,"ep_played":0.4586711116420767,"ep_loss":0.013741334465419197,"loss_cp":15,"best_san":"c5","best_uci":"c7c5","best_text":"+0.30","played_text":"+0.30","best_line":["c5","Nc6","Bb5"],"played_line":["e5"],"candidates":["Nf3 (+0.30)"],"annotations":[],"explanation":["Expected points 0.47 before the move, 0.46 after it: loss 0.014.","The played move is the engine's #2 choice out of 2 analysed candidates.","A loss of 0.014 is in the Excellent range (0.005 to 0.020)."],"note":null,"confidence":"normal","fen_before":"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1","fen_after":"rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"},{"ply":3,"label_text":"Move 2","color":"White","san":"Bc4","uci":"f1c4","label":"Best","accuracy":100.0,"win_before":53.675438329054,"win_after":53.675438329054,"ep_before":0.53675438329054,"ep_played":0.53675438329054,"ep_loss":0.0,"loss_cp":0,"best_san":"Nf3","best_uci":"g1f3","best_text":"+0.30","played_text":"+0.30","best_line":["Nf3","Nc6","Bb5"],"played_line":["Bc4"],"candidates":["Nf3 (+0.30)"],"annotations":[],"explanation":["Expected points 0.54 before the move, 0.54 after it: loss 0.000.","The played move is the engine's first choice.","A loss of 0.000 is in the Best range (at most 0.005)."],"note":"Great and Brilliant need at least 2 candidate moves; use --multipv 2 or higher.","confidence":"normal","fen_before":"rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2","fen_after":"rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2"},{"ply":4,"label_text":"Move 2...","color":"Black","san":"Nc6","uci":"b8c6","label":"Excellent","accuracy":96.97366008104545,"win_before":46.324561670946,"win_after":45.4103562397001,"ep_before":0.46324561670945996,"ep_played":0.454103562397001,"ep_loss":0.009142054312458958,"loss_cp":10,"best_san":"Nf6","best_uci":"g8f6","best_text":"+0.30","played_text":"+0.30","best_line":["Nf6","Nc6","Bb5"],"played_line":["Nc6"],"candidates":["Nf3 (+0.30)"],"annotations":[],"explanation":["Expected points 0.46 before the move, 0.45 after it: loss 0.009.","The played move is the engine's #2 choice out of 2 analysed candidates.","A loss of 0.009 is in the Excellent range (0.005 to 0.020)."],"note":null,"confidence":"normal","fen_before":"rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2","fen_after":"r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3"},{"ply":5,"label_text":"Move 3","color":"White","san":"Qh5","uci":"d1h5","label":"Excellent","accuracy":97.9259895945328,"win_before":75.11255009383484,"win_after":74.41789207783135,"ep_before":0.7511255009383484,"ep_played":0.7441789207783136,"ep_loss":0.006946580160034799,"loss_cp":10,"best_san":"Nc3","best_uci":"b1c3","best_text":"+0.30","played_text":"+0.30","best_line":["Nc3","Nc6","Bb5"],"played_line":["Qh5"],"candidates":["Nf3 (+0.30)"],"annotations":[],"explanation":["Expected points 0.75 before the move, 0.74 after it: loss 0.007.","The played move is the engine's #2 choice out of 2 analysed candidates.","A loss of 0.007 is in the Excellent range (0.005 to 0.020)."],"note":null,"confidence":"normal","fen_before":"r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3","fen_after":"r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3"},{"ply":6,"label_text":"Move 3...","color":"Black","san":"Nf6","uci":"g8f6","label":"Blunder","accuracy":27.18244199044462,"win_before":32.37883625149461,"win_after":3.509835197193421,"ep_before":0.3237883625149461,"ep_played":0.035098351971934214,"ep_loss":0.28869001054301185,"loss_cp":700,"best_san":"Nf6","best_uci":"g8f6","best_text":"+0.30","played_text":"+0.30","best_line":["Nf6","Nc6","Bb5"],"played_line":["Nf6"],"candidates":["Nf3 (+0.30)"],"annotations":["Draw turned into a loss"],"explanation":["Expected points 0.32 before the move, 0.04 after it: loss 0.289.","The played move is the engine's #2 choice out of 2 analysed candidates.","The position changed from drawish to losing for the player.","A loss of 0.289 is in the Blunder range (more than 0.20)."],"note":null,"confidence":"normal","fen_before":"r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3","fen_after":"r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4"},{"ply":7,"label_text":"Move 4","color":"White","san":"Qxf7#","uci":"h5f7","label":"Best","accuracy":100.0,"win_before":99.99840532569468,"win_after":100.0,"ep_before":0.9999840532569467,"ep_played":0.9999840532569467,"ep_loss":0.0,"loss_cp":0,"best_san":"Qxf7#","best_uci":"h5f7","best_text":"+0.30","played_text":"Checkmate","best_line":["Qxf7#"],"played_line":["Qxf7#"],"candidates":["Nf3 (+0.30)"],"annotations":[],"explanation":["Expected points 1.00 before the move, 1.00 after it: loss 0.000.","The played move is the engine's first choice.","A loss of 0.000 is in the Best range (at most 0.005)."],"note":"Great and Brilliant need at least 2 candidate moves; use --multipv 2 or higher.","confidence":"normal","fen_before":"r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4","fen_after":"r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4"}]}</script>
+<script>
+(function () {
+  "use strict";
+  var raw = document.getElementById("plyra-data");
+  if (!raw) { return; }
+  var DATA;
+  try { DATA = JSON.parse(raw.textContent); } catch (e) { return; }
+  var MOVES = DATA.moves, STYLE = DATA.label_style;
+  var GLYPH = { k:"\u265A", q:"\u265B", r:"\u265C", b:"\u265D", n:"\u265E", p:"\u265F" };
+  var TEXT_VS = "\uFE0E";
+  var NS = "http://www.w3.org/2000/svg";
+  var state = { ply: 0, mode: "after", flipped: false, side: "both", label: "all", errorsOnly: false };
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) { n.className = cls; }
+    if (text !== undefined && text !== null) { n.textContent = text; }
+    return n;
+  }
+  function svgEl(tag, attrs) {
+    var n = document.createElementNS(NS, tag);
+    for (var k in attrs) { n.setAttribute(k, attrs[k]); }
+    return n;
+  }
+
+  /* ---------- FEN parsing and board drawing ---------- */
+  function parseFen(fen) {
+    var rows = fen.split(" ")[0].split("/"), board = [];
+    for (var r = 0; r < 8; r++) {
+      var row = [], text = rows[r] || "";
+      for (var i = 0; i < text.length; i++) {
+        var c = text[i];
+        if (c >= "1" && c <= "8") { for (var k = 0; k < +c; k++) { row.push(null); } }
+        else { row.push(c); }
+      }
+      while (row.length < 8) { row.push(null); }
+      board.push(row);
+    }
+    return board;
+  }
+  function squareIndex(name) {  /* "e4" -> {file:4, rank:3} (rank 0 = rank 1) */
+    return { file: name.charCodeAt(0) - 97, rank: +name[1] - 1 };
+  }
+  function boardCoords(file, rank) {  /* -> column,row on screen (0..7) honouring flip */
+    return state.flipped ? { c: 7 - file, r: rank } : { c: file, r: 7 - rank };
+  }
+  function currentFen() {
+    if (state.ply === 0) { return DATA.start_fen; }
+    var m = MOVES[state.ply - 1];
+    return state.mode === "before" ? m.fen_before : m.fen_after;
+  }
+  function drawArrow(svg, uci, color, dashed) {
+    if (!uci || uci.length < 4) { return; }
+    var a = squareIndex(uci.slice(0, 2)), b = squareIndex(uci.slice(2, 4));
+    var p = boardCoords(a.file, a.rank), q = boardCoords(b.file, b.rank);
+    var x1 = p.c + .5, y1 = p.r + .5, x2 = q.c + .5, y2 = q.r + .5;
+    var dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len, head = .32;
+    var ex = x2 - ux * head, ey = y2 - uy * head;
+    var attrs = { x1: x1, y1: y1, x2: ex, y2: ey, stroke: color, "stroke-width": .16, "stroke-linecap": "round", opacity: .85 };
+    if (dashed) { attrs["stroke-dasharray"] = ".3 .22"; }
+    svg.appendChild(svgEl("line", attrs));
+    var px = -uy, py = ux;
+    var pts = [x2, y2, ex + px * .2, ey + py * .2, ex - px * .2, ey - py * .2].join(",");
+    svg.appendChild(svgEl("polygon", { points: pts, fill: color, opacity: .9 }));
+  }
+  function renderBoard() {
+    var host = $("board"), arrows = $("arrows");
+    if (!host) { return; }
+    var grid = parseFen(currentFen()), move = state.ply ? MOVES[state.ply - 1] : null;
+    var marked = {};
+    if (move && state.mode === "after") {
+      marked[move.uci.slice(0, 2)] = true; marked[move.uci.slice(2, 4)] = true;
+    }
+    host.textContent = "";
+    for (var r = 0; r < 8; r++) {
+      for (var c = 0; c < 8; c++) {
+        var file = state.flipped ? 7 - c : c, rank = state.flipped ? r : 7 - r;
+        var name = String.fromCharCode(97 + file) + (rank + 1);
+        var sq = el("div", "sq " + ((file + rank) % 2 === 0 ? "d" : "l") + (marked[name] ? " hl" : ""));
+        sq.setAttribute("data-square", name);
+        var piece = grid[7 - rank][file];
+        if (piece) {
+          var lower = piece.toLowerCase();
+          sq.appendChild(el("span", "piece " + (piece === lower ? "b" : "w"), GLYPH[lower] + TEXT_VS));
+        }
+        if (c === 0) { sq.appendChild(el("span", "coord r", String(rank + 1))); }
+        if (r === 7) { sq.appendChild(el("span", "coord f", String.fromCharCode(97 + file))); }
+        host.appendChild(sq);
+      }
+    }
+    arrows.textContent = "";
+    if (move && state.mode === "before") {
+      if (move.best_uci && move.best_uci !== move.uci) { drawArrow(arrows, move.best_uci, "#3fb950", false); }
+      drawArrow(arrows, move.uci, "#e5534b", move.best_uci !== move.uci);
+    }
+    $("board-caption").textContent = !move ? "Starting position" :
+      (state.mode === "before" ? "Before " : "After ") + move.label_text + " " + move.san;
+  }
+
+  /* ---------- details panel ---------- */
+  function badge(label) {
+    var s = STYLE[label] || STYLE.Unclassified;
+    var b = el("span", "badge", s[2] + " " + label);
+    b.style.background = s[0]; b.style.color = s[1];
+    return b;
+  }
+  function addRow(dl, term, valueNode) {
+    dl.appendChild(el("dt", null, term));
+    var dd = el("dd");
+    if (typeof valueNode === "string") { dd.textContent = valueNode; } else { dd.appendChild(valueNode); }
+    dl.appendChild(dd);
+  }
+  function listNode(items) {
+    var ul = el("ul");
+    items.forEach(function (t) { ul.appendChild(el("li", null, t)); });
+    return ul;
+  }
+  function renderDetails() {
+    var box = $("details-body");
+    box.textContent = "";
+    if (!state.ply) {
+      box.appendChild(el("p", "empty", "Select a move in the list or on the graph. Arrow keys move through the game."));
+      return;
+    }
+    var m = MOVES[state.ply - 1];
+    var head = el("div");
+    head.appendChild(el("strong", null, m.label_text + " \u2014 " + m.color + ": "));
+    head.appendChild(el("span", "mono", m.san));
+    head.appendChild(document.createTextNode(" "));
+    head.appendChild(badge(m.label));
+    box.appendChild(head);
+    var dl = el("dl");
+    addRow(dl, "Played", m.san + "  (" + m.uci + ")");
+    addRow(dl, "Engine's best", m.best_san ? m.best_san + "  (" + (m.best_uci || "") + ")" : "not available");
+    addRow(dl, "Best-move eval", (m.best_text || "n/a") + "  (White's view)");
+    addRow(dl, "After played move", (m.played_text || "n/a") + "  (White's view)");
+    addRow(dl, "Accuracy", m.accuracy === null ? "not scored" : m.accuracy.toFixed(1) + " / 100");
+    addRow(dl, "Win% (mover)", m.win_before === null || m.win_after === null ? "n/a" :
+      m.win_before.toFixed(1) + "% \u2192 " + m.win_after.toFixed(1) + "%");
+    addRow(dl, "Expected points", m.ep_before === null ? "n/a" :
+      m.ep_before.toFixed(2) + " \u2192 " + m.ep_played.toFixed(2) + "  (loss " + m.ep_loss.toFixed(3) + ")");
+    addRow(dl, "Centipawn loss", m.loss_cp === null ? "n/a (forced mate involved or no data)" : m.loss_cp + " cp (" + (m.loss_cp / 100).toFixed(2) + " pawns)");
+    if (m.best_line.length) { addRow(dl, "Best line", (function () { var s = el("span", "mono", m.best_line.join(" ")); return s; })()); }
+    if (m.played_line.length) { addRow(dl, "After the played move", (function () { return el("span", "mono", m.played_line.join(" ")); })()); }
+    if (m.candidates.length) { addRow(dl, "Candidates", m.candidates.join(",  ")); }
+    if (m.annotations.length) { addRow(dl, "Annotations", listNode(m.annotations)); }
+    if (m.explanation.length) { addRow(dl, "Why this label", listNode(m.explanation)); }
+    if (m.note) { addRow(dl, "Note", m.note); }
+    if (m.confidence === "low") { addRow(dl, "Confidence", "low (the evaluation was unstable)"); }
+    box.appendChild(dl);
+  }
+
+  /* ---------- move list, filters, graph ---------- */
+  var ERRORS = { "Inaccuracy": 1, "Mistake": 1, "Miss": 1, "Blunder": 1 };
+  function rowVisible(m) {
+    if (state.side !== "both" && m.color !== state.side) { return false; }
+    if (state.errorsOnly && !ERRORS[m.label]) { return false; }
+    if (state.label !== "all" && m.label !== state.label) { return false; }
+    return true;
+  }
+  function applyFilters() {
+    var rows = document.querySelectorAll("tr.mv"), shown = 0;
+    rows.forEach(function (row) {
+      var m = MOVES[+row.getAttribute("data-ply") - 1];
+      var ok = rowVisible(m);
+      row.classList.toggle("hidden", !ok);
+      if (ok) { shown++; }
+    });
+    $("filter-count").textContent = shown + " of " + MOVES.length + " moves shown";
+  }
+  function select(ply, scroll) {
+    state.ply = Math.max(0, Math.min(MOVES.length, ply));
+    document.querySelectorAll("tr.mv").forEach(function (row) {
+      var on = +row.getAttribute("data-ply") === state.ply;
+      row.classList.toggle("sel", on);
+      if (on) { row.setAttribute("aria-current", "true"); if (scroll) { row.scrollIntoView({ block: "nearest" }); } }
+      else { row.removeAttribute("aria-current"); }
+    });
+    var cursor = $("graph-cursor");
+    if (cursor) {
+      if (state.ply === 0) { cursor.style.display = "none"; }
+      else {
+        var x = DATA.graph.x0 + (DATA.graph.x1 - DATA.graph.x0) * state.ply / Math.max(1, MOVES.length);
+        cursor.setAttribute("x1", x); cursor.setAttribute("x2", x); cursor.style.display = "block";
+      }
+    }
+    renderBoard(); renderDetails();
+  }
+  function setPressed(id, on) { var b = $(id); if (b) { b.setAttribute("aria-pressed", on ? "true" : "false"); } }
+
+  function bind() {
+    document.querySelectorAll("tr.mv").forEach(function (row) {
+      row.setAttribute("tabindex", "0");
+      row.addEventListener("click", function () { select(+row.getAttribute("data-ply"), false); });
+      row.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(+row.getAttribute("data-ply"), false); }
+      });
+    });
+    document.querySelectorAll(".pt").forEach(function (pt) {
+      pt.addEventListener("click", function () { select(+pt.getAttribute("data-ply"), true); });
+    });
+    var graph = $("graph");
+    if (graph) {
+      graph.addEventListener("click", function (e) {
+        var box = graph.getBoundingClientRect(), vb = graph.viewBox.baseVal;
+        var x = (e.clientX - box.left) / box.width * vb.width;
+        var f = (x - DATA.graph.x0) / (DATA.graph.x1 - DATA.graph.x0);
+        select(Math.round(f * MOVES.length), true);
+      });
+    }
+    $("btn-first").addEventListener("click", function () { select(0, true); });
+    $("btn-prev").addEventListener("click", function () { select(state.ply - 1, true); });
+    $("btn-next").addEventListener("click", function () { select(state.ply + 1, true); });
+    $("btn-last").addEventListener("click", function () { select(MOVES.length, true); });
+    $("btn-flip").addEventListener("click", function () {
+      state.flipped = !state.flipped; setPressed("btn-flip", state.flipped); renderBoard();
+    });
+    $("btn-mode").addEventListener("click", function () {
+      state.mode = state.mode === "after" ? "before" : "after";
+      setPressed("btn-mode", state.mode === "before");
+      $("btn-mode").textContent = state.mode === "before" ? "Showing: before move + best move" : "Showing: after move";
+      renderBoard();
+    });
+    $("filter-side").addEventListener("change", function (e) { state.side = e.target.value; applyFilters(); });
+    $("filter-label").addEventListener("change", function (e) { state.label = e.target.value; applyFilters(); });
+    $("filter-errors").addEventListener("click", function () {
+      state.errorsOnly = !state.errorsOnly; setPressed("filter-errors", state.errorsOnly); applyFilters();
+    });
+    document.addEventListener("keydown", function (e) {
+      var tag = (e.target && e.target.tagName) || "";
+      if (tag === "SELECT" || tag === "INPUT") { return; }
+      if (e.key === "ArrowRight") { e.preventDefault(); select(state.ply + 1, true); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); select(state.ply - 1, true); }
+      else if (e.key === "Home") { e.preventDefault(); select(0, true); }
+      else if (e.key === "End") { e.preventDefault(); select(MOVES.length, true); }
+      else if (e.key === "f" || e.key === "F") { $("btn-flip").click(); }
+    });
+  }
+
+  try {
+    var ready = $("board-fallback"); if (ready) { ready.style.display = "none"; }
+    $("board-area").style.display = "block";
+    bind(); applyFilters(); select(0, false);
+    document.documentElement.setAttribute("data-chesslens", "ready");
+  } catch (err) {
+    var fb = $("board-fallback");
+    if (fb) { fb.style.display = "block"; fb.textContent = "The interactive board could not start (" + err.message + "). The move list and graph below still work."; }
+    document.documentElement.setAttribute("data-chesslens", "error");
+  }
+})();
+</script>
+</body>
+</html>
