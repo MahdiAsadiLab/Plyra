@@ -24,3 +24,6 @@ htmlcov/
 # Stockfish executables: do not publish before review
 engine/*.exe
 engine/**/*.exe
+
+# Generated reports
+/reports/
