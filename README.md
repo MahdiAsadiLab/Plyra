@@ -1,39 +1,73 @@
-# Plyra 1.3.2 — Final Premium Dashboard UI
+# Plyra
 
-A final presentation-layer refinement of the existing Plyra 1.3.2 report. The analysis pipeline and offline report structure are retained.
+Chess game analyzer. Give it a PGN file; it uses Stockfish to classify every move (Brilliant, Best, Mistake, Blunder, ...), estimate accuracy for both players, detect the opening, and save an interactive HTML report. Everything runs locally and offline.
 
-## UI refinements
-- Player and accuracy cards span the full report width, with balanced White/Black presentation.
-- Chessboard pieces use a warm, wood-inspired treatment using offline system chess glyphs and CSS shading (not an external piece image set).
-- Classification badges on the board are compact colored symbols rather than move-label text.
-- A slim evaluation bar beside the board displays the post-move engine score in pawns and centipawns when available.
-- The move list and evaluation graph share one panel; the graph is compact and sits directly beneath the move sheet.
-- The move navigator is compact, and the engine candidate panel presents up to three candidates from the stored MultiPV analysis. Selecting one draws its move arrow on the board.
-- Plyra branding is used in the dashboard and generated report metadata where appropriate. Legacy internal identifiers remain where changing them would risk breaking compatibility.
+Accuracy is Plyra's own estimate, not the official Chess.com or Lichess score. This is an early version.
 
-## Important behavior
-- Candidate lines are limited to the candidates saved during the original engine analysis. If the report only contains fewer than three candidates, it cannot invent additional engine lines.
-- Evaluation is shown only when the report has a numeric centipawn or mate score for the selected position. The position before the first move has no separately stored after-move score and displays a dash.
-- The wood-inspired pieces are CSS-styled system chess symbols, not a bundled Chess.com wood-piece asset set; exact rendering can vary slightly by operating system and browser.
-- This UI has not been visually verified in every browser. Run the existing tests and open a newly generated report locally before replacing your working copy.
-
-
-## Opening book and opening-name database
-
-Polyglot move-book detection and opening-name detection are separate features.
-Place your Polyglot `.bin` file at `books/book.bin`. Place a PGN opening database
-with `[Opening "..."]` and optional `[ECO "..."]` headers at `books/openings.pgn`.
-Then run from this project directory:
+## 1. Install
 
 ```bash
-python main.py games/opera_game.pgn --book books/book.bin --opening-db books/openings.pgn
+git clone https://github.com/MahdiAsadiLab/Plyra.git
+cd Plyra
+pip install -r requirements.txt
 ```
 
-`--book` enables the existing Polyglot Book move classification. `--opening-db`
-identifies the longest matching opening line and adds its name/ECO to terminal
-output and the HTML report. The `.bin` file alone usually cannot provide names.
-See `books/README.txt` for details.
+## 2. Install Stockfish
 
-### Building the databases
+Stockfish is not included. Download it from <https://stockfishchess.org/download/> and unzip it. Copy the executable into the `engine/` folder next to `main.py` (create the folder if it is missing).
 
-See `books/README.txt` for the exact steps. In short: `tools/build_openings_pgn.py` converts the Lichess chess-openings TSV files into `books/openings.pgn`, and `tools/build_book.py` builds `books/book.bin` from a Lichess / Lichess Elite game dump.
+Plyra picks up a file in `engine/` only if its name **starts with `stockfish`** and:
+- **Windows:** it ends with `.exe`, for example `engine/stockfish-windows-x86-64-avx2.exe`
+- **macOS / Linux:** it is executable: `chmod +x engine/stockfish*`
+
+Alternatives, in this search order: pass `--stockfish PATH` to the run command, or have `stockfish` on your system `PATH`.
+
+- **macOS:** `brew install stockfish`
+- **Linux:** `sudo apt install stockfish` (the binary may be in `/usr/games/`; if Plyra can't find it, add `--stockfish /usr/games/stockfish`)
+- "Illegal instruction" error: download a more basic build (`sse41-popcnt` or `x86-64`).
+
+## 3. Quick start
+
+```bash
+python main.py games/opera_game.pgn
+```
+
+This needs nothing else. The terminal shows the analysis and the report is saved as `reports/opera_game_plyra.html` (the `reports/` folder is created automatically). Open the HTML file in your browser.
+
+## 4. Optional: opening book and opening names
+
+Without these, the analysis still works; you just won't get the **Book** label or the opening name. Build them once:
+
+**Opening names:** download `a.tsv` to `e.tsv` from <https://github.com/lichess-org/chess-openings>, put them in `books/raw/`, then:
+
+```bash
+python tools/build_openings_pgn.py books/raw -o books/openings.pgn
+```
+
+**Opening book:** download a game dump, for example the Lichess Elite Database from <https://database.nikonoel.fr> (a `.zip`), then:
+
+```bash
+python tools/build_book.py path/to/dump.zip -o books/book.bin
+```
+
+`pip install zstandard` is only needed if your dump is a `.zst` file (such as the ones from database.lichess.org). It is not needed for normal analysis.
+
+## 5. Full command
+
+```bash
+python main.py games/opera_game.pgn --book books/book.bin --opening-db books/openings.pgn --depth 16 --format all --overwrite
+```
+
+| Option | Description |
+| --- | --- |
+| `--stockfish PATH` | Path to the Stockfish executable (if not in `engine/`) |
+| `--depth N` | Search depth, default 12 (higher is slower and more accurate) |
+| `--book FILE` | Polyglot `.bin` book, enables the Book label |
+| `--opening-db FILE` | PGN opening database, enables opening name and ECO |
+| `--format ...` | `html csv pgn json all` (default `html`) |
+| `--output-dir DIR` | Report folder (default `reports`) |
+| `--overwrite` | Replace the old report instead of making a numbered copy |
+
+## Third-party
+
+[Stockfish](https://stockfishchess.org/) (GPL) is a separate download and is not part of this repository. PGN and Polyglot handling uses [python-chess](https://github.com/niklasf/python-chess). Opening names come from [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0).
